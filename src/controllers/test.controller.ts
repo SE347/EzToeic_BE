@@ -7,7 +7,7 @@ import { Result } from "../models/result.model";
 import { User } from "../models/auth.model";
 import { ResultPart } from "../models/resultPart.model";
 import { Part } from "../models/part.model";
-import { DataSource, ILike } from "typeorm";
+import { DataSource, ILike, In } from "typeorm";
 import { AppDataSource } from "../databases/database";
 import { TestSet } from "../models/testSet.model";
 
@@ -93,7 +93,6 @@ const getTestById = async (req: Request, res: Response, next: NextFunction) => {
     .orderBy("question.index")
     .where("part.number in(:...numbers)", { numbers: parts })
     .select(["question", "part", "partDetail"])
-    // .addSelect()
     .getMany();
 
   const tests = await PartDetail.createQueryBuilder("partDetail")
@@ -179,9 +178,14 @@ const getPartSolutionsById = async (
 };
 
 const submitTest = async (req: Request, res: Response, next: NextFunction) => {
-  const params = req.body;
+  const body = req.body;
   var readingCorrectCount = 0;
   var listeningCorrectCount = 0;
+
+  const getTestTitle = async () => {
+    const test = await Test.findOneBy({ id: Number(req.params.testId) });
+    return test.title;
+  };
 
   const questions = await Question.createQueryBuilder("question")
     .innerJoinAndSelect(
@@ -199,50 +203,53 @@ const submitTest = async (req: Request, res: Response, next: NextFunction) => {
     .addGroupBy("part.id")
     .orderBy("question.index", "ASC")
     .where("partDetail.testId = :testId", { testId: req.params.testId })
-    .andWhere("part.number IN(:...numbers)", { numbers: params["parts"] })
+    .andWhere("part.number IN(:...numbers)", { numbers: body["parts"] })
     .getMany();
 
   // console.log(questions);
 
-  const result = await Result.create({
+  const result = Result.create({
     state: "done",
     score: "0",
-    time: params["time"],
+    time: body["time"],
     user: { id: req.auth.userId },
     test: { id: Number(req.params.testId) },
     dateComplete: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
-  }).save();
+  });
+
+  await result.save();
 
   //Thêm result part
-  params["parts"].map(async (value, index) => {
+  body["parts"].map(async (value, index) => {
     const part = await Part.findOne({
       where: {
         number: value,
       },
     });
 
-    await ResultPart.create({
+    const resultPart = ResultPart.create({
       partNumber: value,
       part: part,
       result: result,
-    }).save();
+    });
+    await resultPart.save();
   });
 
   questions.map(async (question, index) => {
     // console.log(params["answers"][value.index.toString()]);
     const resultDetail = ResultDetail.create({
-      answerByUser: params["answers"][question.index] ?? null,
+      answerByUser: body["answers"][question.index] ?? null,
       isCorrect:
-        params["answers"][question.index] == question.answer ? true : false,
+        body["answers"][question.index] == question.answer ? true : false,
       createdAt: new Date(),
       updatedAt: new Date(),
       question: question,
       result: result,
     });
 
-    console.log(resultDetail.isCorrect);
+    // console.log(resultDetail.isCorrect);
 
     //thêm câu đúng
     if (resultDetail.isCorrect && Number(question.index) <= 100) {
@@ -254,7 +261,7 @@ const submitTest = async (req: Request, res: Response, next: NextFunction) => {
     await ResultDetail.insert(resultDetail);
   });
 
-  console.log(readingCorrectCount);
+  // console.log(readingCorrectCount);
   //tính score
   result.score = (
     (readingCorrectCount * 5 > 495 ? 495 : readingCorrectCount * 5) +
@@ -264,57 +271,93 @@ const submitTest = async (req: Request, res: Response, next: NextFunction) => {
   result.correctCount = readingCorrectCount + listeningCorrectCount;
   result.readingCorrectCount = readingCorrectCount;
   result.listeningCorrectCount = listeningCorrectCount;
-  await result.save();
 
-  const resultDetails = await ResultDetail.createQueryBuilder("resultDetail")
-    .innerJoinAndSelect("resultDetail.result", "result")
-    .innerJoinAndSelect("resultDetail.question", "question")
-    .innerJoinAndSelect("question.partDetail", "partDetail")
-    .innerJoinAndSelect("partDetail.part", "part")
-    .where("result.id = :id", { id: result.id })
-    .orderBy("question.index")
-    .select([
-      'question.id as "questionId"',
-      'resultDetail.id as "resultDetailId"',
-      'resultDetail.answerByUser as "answerByUser"',
-      'resultDetail.isCorrect as "isCorrect"',
-      'question.question as "question"',
-      'question.answer as "answer"',
-      'question.imageUrl as "imageUrl"',
-      'question.audioUrl as "audioUrl"',
-      'question.A as "A"',
-      'question.B as "B"',
-      'question.C as "C"',
-      'question.D as "D"',
-      'part.number as "partNumber"',
-    ])
-    .getRawMany();
-
-  var gr = function (xs, key) {
-    return xs.reduce(function (rv, x) {
-      (rv[x[key]] = rv[x[key]] || []).push(x);
-      return rv;
-    }, []);
+  const getQuestionCount = async () => {
+    const count = await PartDetail.createQueryBuilder("partDetail")
+      .where("partDetail.partId IN (:...numbers)", { numbers: [1, 2, 4] })
+      .select("SUM(partDetail.questionCount)", "questionCount")
+      .getRawOne();
+    return count.questionCount;
   };
 
-  let kq = gr(resultDetails, "partNumber");
+  const returnResult = async () => {
+    const resultDetails = await ResultDetail.createQueryBuilder("resultDetail")
+      .innerJoinAndSelect("resultDetail.result", "result")
+      .innerJoinAndSelect("resultDetail.question", "question")
+      .innerJoinAndSelect("question.partDetail", "partDetail")
+      .innerJoinAndSelect("partDetail.part", "part")
+      .where("result.id = :id", { id: result.id })
+      .orderBy("question.index")
+      .select([
+        'question.id as "questionId"',
+        'resultDetail.id as "resultDetailId"',
+        'resultDetail.answerByUser as "answerByUser"',
+        'resultDetail.isCorrect as "isCorrect"',
+        'question.question as "question"',
+        'question.answer as "answer"',
+        'question.imageUrl as "imageUrl"',
+        'question.audioUrl as "audioUrl"',
+        'question.A as "A"',
+        'question.B as "B"',
+        'question.C as "C"',
+        'question.D as "D"',
+        'part.number as "partNumber"',
+        'partDetail.questionCount as "questionCount"',
+      ])
+      .getRawMany();
 
-  const values = Object.values(kq);
-  const keys = Object.keys(kq);
-
-  let questionAnswers = [];
-
-  keys.map((value, index) => {
-    const hi = {
-      partNumber: value,
-      questions: values[index],
+    var gr = function (xs, key) {
+      return xs.reduce(function (rv, x) {
+        (rv[x[key]] = rv[x[key]] || []).push(x);
+        return rv;
+      }, []);
     };
-    questionAnswers.push(hi);
-  });
+
+    let kq = gr(resultDetails, "partNumber");
+
+    const values = Object.values(kq);
+    const keys = Object.keys(kq);
+
+    // console.log(questions.length);
+
+    let questionAnswers = [];
+
+    keys.map((value, index) => {
+      const hi = {
+        partNumber: value,
+        questionCount: values[index][0].questionCount,
+        questions: values[index],
+      };
+      questionAnswers.push(hi);
+    });
+
+    return questionAnswers;
+  };
+
+  let resultDetails;
+  let questionCount;
+  let testTitle;
+
+  await Promise.all([
+    await result.save(),
+    (resultDetails = await returnResult()),
+    (questionCount = await getQuestionCount()),
+    (testTitle = await getTestTitle()),
+  ]);
+
+  const wrongCount = Object.keys(body["answers"]).length - result.correctCount;
+  const undoneCount =
+    Number(questionCount) - Object.keys(body["answers"]).length;
+
+  result.wrongCount = wrongCount;
+  result.undoneCount = undoneCount;
+
+  await result.save();
 
   return res.json({
+    testTitle: testTitle,
     ...result,
-    resultDetails: questionAnswers,
+    resultDetails: resultDetails,
   });
 };
 
@@ -355,8 +398,20 @@ const getDetailResult = async (
   const params = req.params;
 
   const result = await Result.createQueryBuilder("result")
+
+    .innerJoinAndSelect("result.test", "test")
     .where("result.id = :id", { id: params.resultId })
-    .getOne();
+    .select("result.id", "id")
+    .addSelect("test.title", "testTitle")
+    .addSelect("result.score", "score")
+    .addSelect("result.readingCorrectCount", "readingCorrectCount")
+    .addSelect("result.listeningCorrectCount", "listeningCorrectCount")
+    .addSelect("result.correctCount", "correctCount")
+    .addSelect("result.wrongCount", "wrongCount")
+    .addSelect("result.undoneCount", "undoneCount")
+    .addSelect("result.time", "time")
+    // .addSelect('result.id', 'id')
+    .getRawOne();
 
   const questions = await ResultDetail.createQueryBuilder("resultDetail")
     .innerJoinAndSelect("resultDetail.result", "result")
@@ -379,8 +434,18 @@ const getDetailResult = async (
       'question.C as "C"',
       'question.D as "D"',
       'part.number as "partNumber"',
+      'partDetail.questionCount as "questionCount"',
     ])
     .getRawMany();
+
+  // const count = await PartDetail.createQueryBuilder("partDetail")
+  //   .where("partDetail.partId IN (:...numbers)", { numbers: [1, 2, 4] })
+  //   .select("SUM(partDetail.questionCount)", "questionCount")
+  //   .getRawOne();
+
+  // console.log(count);
+
+  // "part.number IN(:...numbers)", { numbers: params["parts"] };
 
   var gr = function (xs, key) {
     return xs.reduce(function (rv, x) {
@@ -399,6 +464,7 @@ const getDetailResult = async (
   keys.map((value, index) => {
     const hi = {
       partNumber: value,
+      questionCount: values[index][0].questionCount,
       questions: values[index],
     };
     questionAnswers.push(hi);
