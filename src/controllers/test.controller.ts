@@ -392,22 +392,47 @@ const getAllResultByUser = async (
   res: Response,
   next: NextFunction
 ) => {
-  const results = await Result.find({
-    where: {
-      user: { id: Number(req.auth.userId) },
-    },
-    order: {
-      id: "ASC",
-      resultParts: { partNumber: "ASC" },
-    },
-    relations: {
-      resultParts: true,
-    },
-  });
+  const response = [];
+  try {
+    var results = await Result.find({
+      where: {
+        user: { id: Number(req.auth.userId) },
+      },
+      order: {
+        id: "ASC",
+        resultParts: { partNumber: "ASC" },
+      },
+      relations: {
+        resultParts: true,
+        test: true,
+      },
+    });
 
-  // console.log(results);
+    results.forEach((e: any) => {
+      (e.title = e.test.title), (e.test = undefined);
+    });
 
-  res.json(results);
+    var groupBy = function (xs, key) {
+      return xs.reduce(function (rv, x) {
+        (rv[x[key]] = rv[x[key]] || []).push(x);
+        return rv;
+      }, {});
+    };
+
+    results = groupBy(results, "title");
+    const keys = Object.keys(results);
+
+    keys.forEach((e) => {
+      response.push({
+        title: e,
+        values: results[e],
+      });
+    });
+  } catch (error) {
+    return res.json({ msg: error });
+  }
+
+  res.json(response);
 };
 
 const getTestResults = async (
