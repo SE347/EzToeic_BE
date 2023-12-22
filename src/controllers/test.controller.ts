@@ -408,8 +408,12 @@ const getAllResultByUser = async (
       },
     });
 
+    // console.log(results)
+
     results.forEach((e: any) => {
-      (e.title = e.test.title), (e.test = undefined);
+      (e.title = e.test.title), 
+      e.testId = e.test.id,
+      (e.test = undefined);
     });
 
     var groupBy = function (xs, key) {
@@ -425,6 +429,7 @@ const getAllResultByUser = async (
     keys.forEach((e) => {
       response.push({
         title: e,
+        testId: results[e][0].testId,
         values: results[e],
       });
     });
