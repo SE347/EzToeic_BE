@@ -148,8 +148,11 @@ const deleteVocabList = async (
     // }
     // return res.json({ msg: `Can't find list with id = ${listId}` });
   } catch (err) {
-    return res.json({ a: "a" });
-    return res.json(err);
+    // return res.json({ a: "a" });
+    logger.error(
+      `User [${req.auth.userId}]: request to delete vocab list error: ${err}`
+    );
+    return res.json("msg: fail to delete vocab list");
   }
 };
 
