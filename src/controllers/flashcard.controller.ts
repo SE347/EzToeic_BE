@@ -152,7 +152,7 @@ const deleteVocabList = async (
     logger.error(
       `User [${req.auth.userId}]: request to delete vocab list error: ${err}`
     );
-    return res.json("msg: fail to delete vocab list");
+    return res.json({"msg": "fail to delete vocab list"});
   }
 };
 
