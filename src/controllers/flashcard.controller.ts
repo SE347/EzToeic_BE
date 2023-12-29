@@ -4,6 +4,7 @@ import { Vocab } from "../models/vocab.model";
 import { Errors } from "../helpers/error";
 import logger from "../configs/logger";
 import { ILike } from "typeorm";
+import { loggers } from "winston";
 
 const getAllFlashcard = async (
   req: Request,
@@ -126,7 +127,14 @@ const deleteVocabList = async (
   });
 
   try {
-    await Vocab.delete(vocabIds);
+    try {
+      console.log(vocabIds)
+      await Vocab.delete(vocabIds);
+    } catch (err) {
+      logger.error(
+        `User [${req.auth.userId}]: request to delete vocab list error: ${err} \n VocabIds is empty`
+      );
+    }
 
     const vocabList = await VocabList.findOneBy({ id: Number(listId) });
     const rs = await VocabList.remove(vocabList);
@@ -140,6 +148,7 @@ const deleteVocabList = async (
     // }
     // return res.json({ msg: `Can't find list with id = ${listId}` });
   } catch (err) {
+    return res.json({ a: "a" });
     return res.json(err);
   }
 };
