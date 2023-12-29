@@ -34,6 +34,7 @@ const updateInfo = async (req: Request, res: Response, next: NextFunction) => {
     await user.save();
     return res.json({
       message: "Update successful",
+      data: user
     });
   } catch (err) {
     return res.json(err);
