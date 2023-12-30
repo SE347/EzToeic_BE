@@ -10,7 +10,7 @@ import { Part } from "../models/part.model";
 import { DataSource, ILike, In } from "typeorm";
 import { AppDataSource } from "../databases/database";
 import { TestSet } from "../models/testSet.model";
-import { client } from "../configs/redis";
+// import { client } from "../configs/redis";
 import logger from "../configs/logger";
 
 const getAllTest = async (req: Request, res: Response, next: NextFunction) => {
@@ -378,7 +378,7 @@ const submitTest = async (req: Request, res: Response, next: NextFunction) => {
 
   await result.save();
 
-  await client.set(`resultDetail:${result.id}`, JSON.stringify(resultDetails));
+  // await client.set(`resultDetail:${result.id}`, JSON.stringify(resultDetails));
 
   return res.json({
     testTitle: testTitle,
@@ -488,14 +488,14 @@ const getDetailResult = async (
     // .addSelect('result.id', 'id')
     .getRawOne();
 
-  const resultDetail = await client.get(`resultDetail:${result.id}`);
+  // const resultDetail = await client.get(`resultDetail:${result.id}`);
 
-  if (resultDetail != null) {
-    return res.json({
-      ...result,
-      resultDetails: JSON.parse(resultDetail),
-    });
-  }
+  // if (resultDetail != null) {
+  //   return res.json({
+  //     ...result,
+  //     resultDetails: JSON.parse(resultDetail),
+  //   });
+  // }
 
   const questions = await ResultDetail.createQueryBuilder("resultDetail")
     .innerJoinAndSelect("resultDetail.result", "result")
@@ -546,10 +546,10 @@ const getDetailResult = async (
     questionAnswers.push(hi);
   });
 
-  await client.set(
-    `resultDetail:${result.id}`,
-    JSON.stringify(questionAnswers)
-  );
+  // await client.set(
+  //   `resultDetail:${result.id}`,
+  //   JSON.stringify(questionAnswers)
+  // );
 
   return res.json({
     ...result,
